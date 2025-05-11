@@ -587,7 +587,7 @@ templates = {
     <div id="easter-egg-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
         <div class="bg-white dark:bg-gray-700 p-6 rounded-lg shadow-lg text-center max-w-sm">
             <h2 class="text-2xl font-bold mb-4">{{ 'You Found the Secret!' if lang == 'en' else 'Вы нашли секрет!' }}</h2>
-            <p class="text-lg mb-4">{{ 'Use code <strong>EASTER20</strong> for a surprise!' if lang == 'en' else 'Используйте код ROMANOVLEXA25 для сюрприза!' }}</p>
+            <p class="text-lg mb-4">{{ 'Use code EASTER20 for a surprise!' if lang == 'en' else 'Используйте код ROMANOVLEXA25 для сюрприза!' }}</p>
             <div class="flex justify-center mb-4">
                 <img src="{{ url_for('static', filename='images/lexa.jpg') if 'lexa.jpg' else 'https://via.placeholder.com/100' }}" alt="T-shirt" class="w-24 h-24 animate-spin-slow">
             </div>
