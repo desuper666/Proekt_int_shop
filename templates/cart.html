@@ -1,0 +1,45 @@
+
+{% extends 'base.html' %}
+{% block content %}
+    <h1 class="text-3xl font-bold mb-6">{{ t.your_cart }}</h1>
+    {% if cart_items %}
+        <div class="bg-white dark:bg-gray-700 rounded-lg shadow-md p-4">
+            {% for item in cart_items %}
+                <div class="flex items-center justify-between border-b py-4">
+                    <div class="flex items-center">
+                        <img src="{{ url_for('static', filename='images/' + item.product.image) if item.product.image else 'https://via.placeholder.com/100' }}" alt="{{ item.product.name_en if lang == 'en' else item.product.name_ru }}" class="w-24 h-24 object-cover rounded mr-4">
+                        <div>
+                            <h2 class="text-lg font-semibold">{{ item.product.name_en if lang == 'en' else item.product.name_ru }}</h2>
+                            <p class="text-gray-600 dark:text-gray-300">${{ "%.2f" % item.product.price }} x {{ item.quantity }}</p>
+                            <p class="text-gray-600 dark:text-gray-300">{{ t.stock.format(item.product.stock) }}</p>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('remove_from_cart', item_id=item.id) }}" class="text-red-600 dark:text-red-400 hover:underline">{{ t.remove }}</a>
+                </div>
+            {% endfor %}
+            <div class="mt-4">
+                <form method="POST" action="{{ url_for('apply_promo') }}" class="mb-4 flex gap-2">
+                    <input type="text" name="promo_code" placeholder="{{ t.promo_code }}" class="border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                    <button type="submit" class="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">{{ t.apply_promo }}</button>
+                </form>
+                {% if applied_promo %}
+                    <p class="text-green-600 dark:text-green-400 mb-2">{{ t.promo_applied.format(applied_promo.discount_percent) }}</p>
+                {% endif %}
+                <p class="text-lg font-bold">Subtotal: ${{ "%.2f" % subtotal }}</p>
+                {% if discount > 0 %}
+                    <p class="text-lg font-bold text-green-600 dark:text-green-400">{{ t.discount }}: -${{ "%.2f" % discount }}</p>
+                {% endif %}
+                <p class="text-xl font-bold">{{ t.total }}: ${{ "%.2f" % total }}</p>
+                <form method="POST" action="{{ url_for('place_order') }}">
+                    <div class="mb-4">
+                        <label for="delivery_address" class="block text-gray-700 dark:text-gray-300">{{ t.delivery_address }}</label>
+                        <textarea name="delivery_address" id="delivery_address" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required></textarea>
+                    </div>
+                    <button type="submit" class="mt-4 bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">{{ t.place_order }}</button>
+                </form>
+            </div>
+        </div>
+    {% else %}
+        <p>{{ t.empty_cart }}</p>
+    {% endif %}
+{% endblock %}
