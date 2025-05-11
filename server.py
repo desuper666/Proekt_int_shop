@@ -248,7 +248,6 @@ with app.app_context():
                     description_ru="Стильные белые ботинки", image="White_boots.jpg", stock=random.randint(10, 20)),
         ]
         db.session.bulk_save_objects(products)
-        # Add sample promo codes with timezone-aware datetimes
         promo_codes = [
             PromoCode(
                 code="EASTER20",
@@ -375,7 +374,6 @@ def apply_promo():
 
     current_time = datetime.now(timezone.utc)
     if promo:
-        # Ensure promo.valid_until is timezone-aware
         valid_until = promo.valid_until
         if valid_until.tzinfo is None:
             valid_until = valid_until.replace(tzinfo=timezone.utc)
@@ -464,7 +462,6 @@ def place_order():
     if applied_promo:
         promo = PromoCode.query.get(applied_promo['id'])
         if promo:
-            # Ensure promo.valid_until is timezone-aware
             valid_until = promo.valid_until
             if valid_until.tzinfo is None:
                 valid_until = valid_until.replace(tzinfo=timezone.utc)
