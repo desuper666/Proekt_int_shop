@@ -578,7 +578,6 @@ templates = {
         {% endwith %}
         {% block content %}{% endblock %}
     </div>
-    <!-- Пасхалка: Скрытая кнопка -->
     <div class="fixed bottom-4 right-4">
         <button id="easter-egg-button" class="text-gray-100 dark:text-gray-800 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-300">
             {{ 'Secret' if lang == 'en' else 'Секрет' }}
@@ -587,7 +586,7 @@ templates = {
     <div id="easter-egg-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
         <div class="bg-white dark:bg-gray-700 p-6 rounded-lg shadow-lg text-center max-w-sm">
             <h2 class="text-2xl font-bold mb-4">{{ 'You Found the Secret!' if lang == 'en' else 'Вы нашли секрет!' }}</h2>
-            <p class="text-lg mb-4">{{ 'Use code EASTER20 for a surprise!' if lang == 'en' else 'Используйте код ROMANOVLEXA25 для сюрприза!' }}</p>
+            <p class="text-lg mb-4">{{ 'Use code <strong>EASTER20</strong> for a surprise!' if lang == 'en' else 'Используйте код ROMANOVLEXA25 для сюрприза!' }}</p>
             <div class="flex justify-center mb-4">
                 <img src="{{ url_for('static', filename='images/lexa.jpg') if 'lexa.jpg' else 'https://via.placeholder.com/100' }}" alt="T-shirt" class="w-24 h-24 animate-spin-slow">
             </div>
@@ -596,6 +595,7 @@ templates = {
             </button>
         </div>
     </div>
+    {% block scripts %}{% endblock %}
     <script>
         function toggleTheme() {
             const html = document.documentElement;
@@ -655,47 +655,6 @@ templates = {
     </script>
 </body>
 </html>
-''',
-    'index.html': '''
-{% extends 'base.html' %}
-{% block content %}
-    <h1 class="text-3xl font-bold mb-6">{{ t.our_products }}</h1>
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        {% for product in products %}
-            <div class="bg-white dark:bg-gray-700 rounded-lg shadow-md p-4">
-                <div class="relative w-full h-64 flex items-center justify-center">
-                    <img src="{{ url_for('static', filename='images/' + product.image) if product.image else 'https://via.placeholder.com/150' }}" alt="{{ product.name_en if lang == 'en' else product.name_ru }}" class="max-h-full max-w-full object-contain rounded">
-                </div>
-                <h2 class="text-xl font-semibold mt-2">{{ product.name_en if lang == 'en' else product.name_ru }}</h2>
-                <p class="text-gray-600 dark:text-gray-300">{{ product.description_en if lang == 'en' else product.description_ru }}</p>
-                <p class="text-lg font-bold mt-2">${{ "%.2f" % product.price }}</p>
-                <p class="text-gray-600 dark:text-gray-300">{{ t.stock.format(product.stock) }}</p>
-                <a href="{{ url_for('product_detail', product_id=product.id) }}" class="mt-4 inline-block bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">{{ t.view_details }}</a>
-            </div>
-        {% endfor %}
-    </div>
-{% endblock %}
-''',
-    'register.html': '''
-{% extends 'base.html' %}
-{% block content %}
-    <h1 class="text-3xl font-bold mb-6">{{ t.register }}</h1>
-    <form method="POST" class="max-w-md">
-        <div class="mb-4">
-            <label for="username" class="block text-gray-700 dark:text-gray-300">{{ t.username }}</label>
-            <input type="text" name="username" id="username" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required>
-        </div>
-        <div class="mb-4">
-            <label for="email" class="block text-gray-700 dark:text-gray-300">{{ t.email }}</label>
-            <input type="email" name="email" id="email" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required>
-        </div>
-        <div class="mb-4">
-            <label for="password" class="block text-gray-700 dark:text-gray-300">{{ t.password }}</label>
-            <input type="password" name="password" id="password" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required>
-        </div>
-        <button type="submit" class="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">{{ t.register }}</button>
-    </form>
-{% endblock %}
 ''',
     'login.html': '''
 {% extends 'base.html' %}
@@ -774,7 +733,11 @@ templates = {
                 <form method="POST" action="{{ url_for('place_order') }}">
                     <div class="mb-4">
                         <label for="delivery_address" class="block text-gray-700 dark:text-gray-300">{{ t.delivery_address }}</label>
-                        <textarea name="delivery_address" id="delivery_address" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required></textarea>
+                        <textarea name="delivery_address" id="delivery_address" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 mb-2" required></textarea>
+                        <div id="map" style="width: 100%; height: 400px;" class="mb-4 rounded-lg overflow-hidden"></div>
+                        <button type="button" id="find-address" class="bg-gray-200 dark:bg-gray-600 px-4 py-2 rounded mb-4">
+                            {{ t.find_on_map }}
+                        </button>
                     </div>
                     <button type="submit" class="mt-4 bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">{{ t.place_order }}</button>
                 </form>
@@ -783,6 +746,66 @@ templates = {
     {% else %}
         <p>{{ t.empty_cart }}</p>
     {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://api-maps.yandex.ru/2.1/?apikey=f3a0fe3a-b07e-4840-a1da-06f18b2ddf13&lang=ru_RU" type="text/javascript"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const deliveryAddressField = document.getElementById('delivery_address');
+    if (!deliveryAddressField) return;
+
+    ymaps.ready(initMap);
+
+    function initMap() {
+        const map = new ymaps.Map('map', {
+            center: [55.76, 37.64],
+            zoom: 10
+        });
+
+        const searchControl = new ymaps.control.SearchControl({
+            options: {
+                provider: 'yandex#search',
+                noPlacemark: true
+            }
+        });
+        map.controls.add(searchControl);
+
+        const placemark = new ymaps.Placemark(map.getCenter(), {}, {
+            draggable: true
+        });
+        map.geoObjects.add(placemark);
+
+        searchControl.events.add('resultselect', function(e) {
+            const selected = searchControl.getResultsArray()[e.get('index')];
+            const address = selected.getAddressLine();
+            deliveryAddressField.value = address;
+            placemark.geometry.setCoordinates(selected.geometry.getCoordinates());
+        });
+
+        placemark.events.add('dragend', function() {
+            ymaps.geocode(placemark.geometry.getCoordinates()).then(function(res) {
+                const firstGeoObject = res.geoObjects.get(0);
+                deliveryAddressField.value = firstGeoObject.getAddressLine();
+            });
+        });
+
+        document.getElementById('find-address').addEventListener('click', function() {
+            const address = deliveryAddressField.value.trim();
+            if (address) {
+                ymaps.geocode(address).then(function(res) {
+                    const firstGeoObject = res.geoObjects.get(0);
+                    if (firstGeoObject) {
+                        const coords = firstGeoObject.geometry.getCoordinates();
+                        map.setCenter(coords, 15);
+                        placemark.geometry.setCoordinates(coords);
+                    }
+                });
+            }
+        });
+    }
+});
+</script>
 {% endblock %}
 ''',
     'orders.html': '''
