@@ -735,9 +735,6 @@ templates = {
                         <label for="delivery_address" class="block text-gray-700 dark:text-gray-300">{{ t.delivery_address }}</label>
                         <textarea name="delivery_address" id="delivery_address" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 mb-2" required></textarea>
                         <div id="map" style="width: 100%; height: 400px;" class="mb-4 rounded-lg overflow-hidden"></div>
-                        <button type="button" id="find-address" class="bg-gray-200 dark:bg-gray-600 px-4 py-2 rounded mb-4">
-                            {{ t.find_on_map }}
-                        </button>
                     </div>
                     <button type="submit" class="mt-4 bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">{{ t.place_order }}</button>
                 </form>
@@ -846,4 +843,4 @@ os.makedirs('static/images', exist_ok=True)
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5555))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='127.0.0.1', port=port)
