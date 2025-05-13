@@ -6,8 +6,10 @@ import os
 import random
 import threading
 import time
+import requests
 
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = os.path.join('static', 'maps')
 app.config['SECRET_KEY'] = 'your-secret-key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///clothing_store.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -398,6 +400,7 @@ def apply_promo():
 @app.route('/cart')
 def cart():
     lang = session.get('lang', 'en')
+
     if 'user_id' not in session:
         flash('Please ' + translations[lang]['login'] + ' to view your ' + translations[lang]['cart'] + '.', 'error')
         return redirect(url_for('login'))
@@ -405,14 +408,53 @@ def cart():
     subtotal = sum(item.product.price * item.quantity for item in cart_items)
     discount = 0
     applied_promo = session.get('applied_promo')
-
     if applied_promo:
         discount = subtotal * (applied_promo['discount_percent'] / 100)
 
     total = subtotal - discount
-    return render_template('cart.html', cart_items=cart_items, subtotal=subtotal,
-                           total=total, discount=discount, applied_promo=applied_promo,
-                           t=translations[lang], lang=lang)
+
+    map_image_url = session.get('map_image_url')
+
+    return render_template(
+        'cart.html',
+        cart_items=cart_items,
+        subtotal=subtotal,
+        discount=discount,
+        total=total,
+        applied_promo=applied_promo,
+        map_image_url=map_image_url,
+        t=translations[lang],
+        lang=lang
+    )
+
+
+@app.route('/show_map', methods=['POST'])
+def show_map():
+    coords = request.form.get('coordinates', '')
+    try:
+        lat, lon = map(str.strip, coords.split(','))
+        filename = f"map_{lat}_{lon}.png"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        url = (
+            f"https://static-maps.yandex.ru/v1?"
+            f"ll={lon},{lat}&spn=0.016457,0.00619&pt={lon},{lat}&apikey=f3a0fe3a-b07e-4840-a1da-06f18b2ddf13"
+        )
+
+        response = requests.get(url)
+        if response.status_code == 200:
+            with open(filepath, 'wb') as f:
+                f.write(response.content)
+            session['map_image_url'] = f"maps/{filename}"
+        else:
+            flash("Failed to load map from Yandex API", "error")
+
+    except Exception as e:
+        print("Ошибка обработки координат:", e)
+        flash("Invalid coordinates format. Please enter in 'latitude, longitude' format.", "error")
+
+    return redirect(url_for('cart'))
+
 
 
 @app.route('/remove_from_cart/<int:item_id>')
@@ -700,111 +742,77 @@ templates = {
 ''',
     'cart.html': '''
 {% extends 'base.html' %}
+
 {% block content %}
 <h1 class="text-3xl font-bold mb-6">{{ t.your_cart }}</h1>
+
 {% if cart_items %}
-<div class="bg-white dark:bg-gray-700 rounded-lg shadow-md p-4">
-    {% for item in cart_items %}
-    <div class="flex items-center justify-between border-b py-4">
-        <div class="flex items-center">
-            <img src="{{ url_for('static', filename='images/' + item.product.image) if item.product.image else 'https://via.placeholder.com/100' }}"
-                 alt="{{ item.product.name_en if lang == 'en' else item.product.name_ru }}"
-                 class="w-24 h-24 object-cover rounded mr-4">
-            <div>
-                <h2 class="text-lg font-semibold">{{ item.product.name_en if lang == 'en' else item.product.name_ru }}</h2>
-                <p class="text-gray-600 dark:text-gray-300">${{ "%.2f" % item.product.price }} x {{ item.quantity }}</p>
-                <p class="text-gray-600 dark:text-gray-300">{{ t.stock.format(item.product.stock) }}</p>
+    <div class="bg-white dark:bg-gray-700 rounded-lg shadow-md p-4">
+        {% for item in cart_items %}
+            <div class="flex items-center justify-between border-b py-4">
+                <div class="flex items-center">
+                    <img src="{{ url_for('static', filename='images/' + item.product.image) if item.product.image else 'https://via.placeholder.com/100' }}" alt="{{ item.product.name_en if lang == 'en' else item.product.name_ru }}" class="w-24 h-24 object-cover rounded mr-4">
+                    <div>
+                        <h2 class="text-lg font-semibold">{{ item.product.name_en if lang == 'en' else item.product.name_ru }}</h2>
+                        <p class="text-gray-600 dark:text-gray-300">${{ "%.2f" % item.product.price }} x {{ item.quantity }}</p>
+                        <p class="text-gray-600 dark:text-gray-300">{{ t.stock.format(item.product.stock) }}</p>
+                    </div>
+                </div>
+                <a href="{{ url_for('remove_from_cart', item_id=item.id) }}" class="text-red-600 dark:text-red-400 hover:underline">{{ t.remove }}</a>
             </div>
-        </div>
-        <a href="{{ url_for('remove_from_cart', item_id=item.id) }}"
-           class="text-red-600 dark:text-red-400 hover:underline">{{ t.remove }}</a>
-    </div>
-    {% endfor %}
-    <div class="mt-4">
-        <form method="POST" action="{{ url_for('apply_promo') }}" class="mb-4 flex gap-2">
-            <input type="text" name="promo_code" placeholder="{{ t.promo_code }}"
-                   class="border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-            <button type="submit"
-                    class="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">
-                {{ t.apply_promo }}
-            </button>
-        </form>
-        {% if applied_promo %}
-        <p class="text-green-600 dark:text-green-400 mb-2">{{ t.promo_applied.format(applied_promo.discount_percent) }}</p>
-        {% endif %}
-        <p class="text-lg font-bold">Subtotal: ${{ "%.2f" % subtotal }}</p>
-        {% if discount > 0 %}
-        <p class="text-lg font-bold text-green-600 dark:text-green-400">{{ t.discount }}: -${{ "%.2f" % discount }}</p>
-        {% endif %}
-        <p class="text-xl font-bold">{{ t.total }}: ${{ "%.2f" % total }}</p>
-        <form method="POST" action="{{ url_for('place_order') }}">
-            <div class="mb-4">
-                <label for="delivery_address" class="block text-gray-700 dark:text-gray-300">{{ t.delivery_address }}</label>
-                <div class="flex gap-2 mb-2">
-                    <textarea name="delivery_address" id="delivery_address"
-                              class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                              required></textarea>
-                    <button type="button" id="find-address"
-                            class="whitespace-nowrap bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">
-                        {{ t.find_on_map }}
+        {% endfor %}
+
+        <div class="mt-4">
+            <form method="POST" action="{{ url_for('apply_promo') }}" class="mb-4 flex gap-2">
+                <input type="text" name="promo_code" placeholder="{{ t.promo_code }}" class="border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                <button type="submit" class="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">{{ t.apply_promo }}</button>
+            </form>
+
+            {% if applied_promo %}
+                <p class="text-green-600 dark:text-green-400 mb-2">{{ t.promo_applied.format(applied_promo.discount_percent) }}</p>
+            {% endif %}
+
+            <p class="text-lg font-bold">Subtotal: ${{ "%.2f" % subtotal }}</p>
+            {% if discount > 0 %}
+                <p class="text-lg font-bold text-green-600 dark:text-green-400">{{ t.discount }}: -${{ "%.2f" % discount }}</p>
+            {% endif %}
+            <p class="text-xl font-bold">{{ t.total }}: ${{ "%.2f" % total }}</p>
+
+            <form method="POST" action="{{ url_for('place_order') }}">
+                <div class="mb-4">
+                    <label for="delivery_address" class="block text-gray-700 dark:text-gray-300">{{ t.delivery_address }}</label>
+                    <textarea name="delivery_address" id="delivery_address" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 mb-4" required></textarea>
+
+                    <button type="submit" class="mt-2 bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">
+                        {{ t.place_order }}
                     </button>
                 </div>
-                <div id="map" style="width: 100%; height: 400px;" class="rounded-lg overflow-hidden"></div>
-            </div>
-            <button type="submit"
-                    class="mt-4 bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">
-                {{ t.place_order }}
-            </button>
-        </form>
+            </form>
+        </div>
     </div>
-</div>
 {% else %}
-<p>{{ t.empty_cart }}</p>
+    <p>{{ t.empty_cart }}</p>
 {% endif %}
 
-<script src="https://api-maps.yandex.ru/2.1/?apikey=f3a0fe3a-b07e-4840-a1da-06f18b2ddf13&lang=ru_RU" type="text/javascript"></script>
-<script>
-    ymaps.ready(function () {
-        let map;
-        document.getElementById('find-address').addEventListener('click', function () {
-            const address = document.getElementById('delivery_address').value;
-            if (!address) {
-                alert("{{ t.delivery_address }}");
-                return;
-            }
+<div class="mt-10 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg shadow">
+    <h2 class="text-2xl font-semibold mb-2">Поиск адреса по координатам</h2>
+    <form method="POST" action="{{ url_for('show_map') }}" class="flex flex-col gap-3">
+        <input type="text" name="coordinates" id="coordinates" required
+               placeholder="55.757718,37.677751"
+               class="border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
 
-            ymaps.geocode(address).then(function (res) {
-                const firstGeoObject = res.geoObjects.get(0);
-                if (!firstGeoObject) {
-                    alert("Адрес не найден.");
-                    return;
-                }
+        <button type="submit" class="bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600 w-max">
+            Показать карту
+        </button>
+    </form>
 
-                const coords = firstGeoObject.geometry.getCoordinates();
-
-                if (!map) {
-                    map = new ymaps.Map("map", {
-                        center: coords,
-                        zoom: 15,
-                        controls: ['zoomControl']
-                    });
-                } else {
-                    map.setCenter(coords, 15);
-                    map.geoObjects.removeAll();
-                }
-
-                const placemark = new ymaps.Placemark(coords, {
-                    balloonContent: firstGeoObject.getAddressLine()
-                });
-
-                map.geoObjects.add(placemark);
-            }, function (err) {
-                console.error(err);
-                alert("Ошибка при поиске адреса.");
-            });
-        });
-    });
-</script>
+    {% if map_image_url %}
+        <div class="mt-4">
+            <h3 class="text-lg font-semibold mb-2">Изображение:</h3>
+            <img src="{{ url_for('static', filename=map_image_url) }}" alt="Map" class="w-full max-w-md rounded shadow">
+        </div>
+    {% endif %}
+</div>
 {% endblock %}
 ''',
     'orders.html': '''
