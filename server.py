@@ -734,12 +734,14 @@ templates = {
                     <div class="mb-4">
                         <label for="delivery_address" class="block text-gray-700 dark:text-gray-300">{{ t.delivery_address }}</label>
                         <div class="flex gap-2 mb-2">
-                            <textarea name="delivery_address" id="delivery_address" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required></textarea>
+                            <input type="text" name="delivery_address" id="delivery_address" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required>
                             <button type="button" id="find-address" class="whitespace-nowrap bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">
                                 {{ t.find_on_map }}
                             </button>
                         </div>
-                        <div id="map" style="width: 100%; height: 400px;" class="rounded-lg overflow-hidden"></div>
+                        <div id="map" style="width: 100%; height: 400px; display: none;" class="rounded-lg overflow-hidden mb-4"></div>
+                        <input type="hidden" id="coordinates" name="coordinates">
+                        <p id="address-error" class="text-red-500 mt-2" style="display: none;"></p>
                     </div>
                     <button type="submit" class="mt-4 bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">{{ t.place_order }}</button>
                 </form>
@@ -748,62 +750,104 @@ templates = {
     {% else %}
         <p>{{ t.empty_cart }}</p>
     {% endif %}
-{% endblock %}
 
-{% block scripts %}
-<script src="https://api-maps.yandex.ru/2.1/?apikey=f3a0fe3a-b07e-4840-a1da-06f18b2ddf13&lang=ru_RU" type="text/javascript"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const deliveryAddressField = document.getElementById('delivery_address');
-    if (!deliveryAddressField) return;
+    <script src="https://api-maps.yandex.ru/2.1/?apikey=f3a0fe3a-b07e-4840-a1da-06f18b2ddf13&lang=ru_RU" type="text/javascript"></script>
+    <script type="text/javascript">
+        document.addEventListener('DOMContentLoaded', function() {
+            const addressInput = document.getElementById('delivery_address');
+            const findButton = document.getElementById('find-address');
+            const mapContainer = document.getElementById('map');
+            const coordinatesInput = document.getElementById('coordinates');
+            const addressError = document.getElementById('address-error');
 
-    ymaps.ready(initMap);
+            findButton.addEventListener('click', function() {
+                const address = addressInput.value.trim();
+                if (!address) {
+                    showError('Пожалуйста, введите адрес');
+                    return;
+                }
 
-    function initMap() {
-        const map = new ymaps.Map('map', {
-            center: [55.76, 37.64],
-            zoom: 10,
-            suppressMapOpenBlock: true, 
-            controls: [] 
-        });
+                ymaps.ready(function() {
+                    const map = new ymaps.Map('map', {
+                        center: [55.76, 37.64],
+                        zoom: 10
+                    });
 
-        const placemark = new ymaps.Placemark(map.getCenter(), {}, {
-            draggable: true
-        });
-        map.geoObjects.add(placemark);
+                    ymaps.geocode(address, {
+                        results: 1
+                    }).then(function(res) {
+                        const firstGeoObject = res.geoObjects.get(0);
+                        if (!firstGeoObject) {
+                            showError('Адрес не найден. Показана приблизительная карта местности');
+                            
+                            const suggestApiUrl = `https://suggest-maps.yandex.ru/v1/suggest?apikey=f3a0fe3a-b07e-4840-a1da-06f18b2ddf13&text=${encodeURIComponent(address)}&lang=ru_RU`;
+                            
+                            fetch(suggestApiUrl)
+                                .then(response => response.json())
+                                .then(data => {
+                                    if (data.results && data.results.length > 0) {
+                                        const suggestedAddress = data.results[0].title;
+                                        addressInput.value = suggestedAddress;
+                                        return ymaps.geocode(suggestedAddress, { results: 1 });
+                                    }
+                                    return Promise.reject('No suggestions');
+                                })
+                                .then(function(newRes) {
+                                    const newGeoObject = newRes.geoObjects.get(0);
+                                    if (newGeoObject) {
+                                        displayMap(map, newGeoObject);
+                                    } else {
+                                        displayApproximateMap(map, address);
+                                    }
+                                })
+                                .catch(function() {
+                                    displayApproximateMap(map, address);
+                                });
+                        } else {
+                            displayMap(map, firstGeoObject);
+                        }
+                    }).catch(function() {
+                        showError('Ошибка при поиске адреса. Показана приблизительная карта');
+                        displayApproximateMap(map, address);
+                    });
+                });
+            });
 
-        document.getElementById('find-address').addEventListener('click', function() {
-            const address = deliveryAddressField.value.trim();
-            if (address) {
-                ymaps.geocode(address).then(function(res) {
-                    const firstGeoObject = res.geoObjects.get(0);
-                    if (firstGeoObject) {
-                        const coords = firstGeoObject.geometry.getCoordinates();
-                        map.setCenter(coords, 15);
-                        placemark.geometry.setCoordinates(coords);
-                        deliveryAddressField.value = firstGeoObject.getAddressLine();
+            function displayMap(map, geoObject) {
+                const coordinates = geoObject.geometry.getCoordinates();
+                coordinatesInput.value = coordinates.join(',');
+                map.setCenter(coordinates, 15);
+                
+                const placemark = new ymaps.Placemark(coordinates, {
+                    hintContent: geoObject.getAddressLine(),
+                    balloonContent: geoObject.getAddressLine()
+                });
+                
+                map.geoObjects.add(placemark);
+                mapContainer.style.display = 'block';
+                addressError.style.display = 'none';
+            }
+
+            function displayApproximateMap(map, address) {
+                ymaps.geocode(address, {
+                    kind: 'locality',
+                    results: 1
+                }).then(function(res) {
+                    const geoObject = res.geoObjects.get(0);
+                    if (geoObject) {
+                        const coordinates = geoObject.geometry.getCoordinates();
+                        map.setCenter(coordinates, 12);
+                        mapContainer.style.display = 'block';
                     }
                 });
             }
+
+            function showError(message) {
+                addressError.textContent = message;
+                addressError.style.display = 'block';
+            }
         });
-        placemark.events.add('dragend', function() {
-            ymaps.geocode(placemark.geometry.getCoordinates()).then(function(res) {
-                const firstGeoObject = res.geoObjects.get(0);
-                deliveryAddressField.value = firstGeoObject.getAddressLine();
-            });
-        });
-    }
-});
-</script>
-<style>
-    #map {
-        position: relative;
-        z-index: 1;
-    }
-    .ymaps-2-1-79-copyright__wrap {
-        display: none !important;
-    }
-</style>
+    </script>
 {% endblock %}
 ''',
     'orders.html': '''
