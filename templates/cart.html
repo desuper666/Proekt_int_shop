@@ -32,11 +32,13 @@
                 <form method="POST" action="{{ url_for('place_order') }}">
                     <div class="mb-4">
                         <label for="delivery_address" class="block text-gray-700 dark:text-gray-300">{{ t.delivery_address }}</label>
-                        <textarea name="delivery_address" id="delivery_address" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 mb-2" required></textarea>
-                        <div id="map" style="width: 100%; height: 400px;" class="mb-4 rounded-lg overflow-hidden"></div>
-                        <button type="button" id="find-address" class="bg-gray-200 dark:bg-gray-600 px-4 py-2 rounded mb-4">
-                            {{ t.find_on_map }}
-                        </button>
+                        <div class="flex gap-2 mb-2">
+                            <textarea name="delivery_address" id="delivery_address" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" required></textarea>
+                            <button type="button" id="find-address" class="whitespace-nowrap bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">
+                                {{ t.find_on_map }}
+                            </button>
+                        </div>
+                        <div id="map" style="width: 100%; height: 400px;" class="rounded-lg overflow-hidden"></div>
                     </div>
                     <button type="submit" class="mt-4 bg-blue-600 dark:bg-blue-700 text-white px-4 py-2 rounded hover:bg-blue-700 dark:hover:bg-blue-600">{{ t.place_order }}</button>
                 </form>
@@ -59,35 +61,15 @@ document.addEventListener('DOMContentLoaded', function() {
     function initMap() {
         const map = new ymaps.Map('map', {
             center: [55.76, 37.64],
-            zoom: 10
+            zoom: 10,
+            suppressMapOpenBlock: true, 
+            controls: [] 
         });
-
-        const searchControl = new ymaps.control.SearchControl({
-            options: {
-                provider: 'yandex#search',
-                noPlacemark: true
-            }
-        });
-        map.controls.add(searchControl);
 
         const placemark = new ymaps.Placemark(map.getCenter(), {}, {
             draggable: true
         });
         map.geoObjects.add(placemark);
-
-        searchControl.events.add('resultselect', function(e) {
-            const selected = searchControl.getResultsArray()[e.get('index')];
-            const address = selected.getAddressLine();
-            deliveryAddressField.value = address;
-            placemark.geometry.setCoordinates(selected.geometry.getCoordinates());
-        });
-
-        placemark.events.add('dragend', function() {
-            ymaps.geocode(placemark.geometry.getCoordinates()).then(function(res) {
-                const firstGeoObject = res.geoObjects.get(0);
-                deliveryAddressField.value = firstGeoObject.getAddressLine();
-            });
-        });
 
         document.getElementById('find-address').addEventListener('click', function() {
             const address = deliveryAddressField.value.trim();
@@ -98,11 +80,27 @@ document.addEventListener('DOMContentLoaded', function() {
                         const coords = firstGeoObject.geometry.getCoordinates();
                         map.setCenter(coords, 15);
                         placemark.geometry.setCoordinates(coords);
+                        deliveryAddressField.value = firstGeoObject.getAddressLine();
                     }
                 });
             }
         });
+        placemark.events.add('dragend', function() {
+            ymaps.geocode(placemark.geometry.getCoordinates()).then(function(res) {
+                const firstGeoObject = res.geoObjects.get(0);
+                deliveryAddressField.value = firstGeoObject.getAddressLine();
+            });
+        });
     }
 });
 </script>
+<style>
+    #map {
+        position: relative;
+        z-index: 1;
+    }
+    .ymaps-2-1-79-copyright__wrap {
+        display: none !important;
+    }
+</style>
 {% endblock %}
